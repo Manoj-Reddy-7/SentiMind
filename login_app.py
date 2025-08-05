@@ -2,20 +2,25 @@ import streamlit as st
 import json
 import os
 
-# File to store user data
 USER_DATA_FILE = "users.json"
 
-# Load user data from file
+# Load users with fallback to empty dict
 def load_users():
-    if os.path.exists(USER_DATA_FILE):
-        with open(USER_DATA_FILE, "r") as f:
-            return json.load(f)
+    try:
+        if os.path.exists(USER_DATA_FILE):
+            with open(USER_DATA_FILE, "r") as f:
+                return json.load(f)
+    except:
+        pass
     return {}
 
-# Save user data to file
+# Try saving users (fails silently on Streamlit Cloud)
 def save_users(users):
-    with open(USER_DATA_FILE, "w") as f:
-        json.dump(users, f)
+    try:
+        with open(USER_DATA_FILE, "w") as f:
+            json.dump(users, f)
+    except:
+        pass
 
 # Main App
 def main():
@@ -28,28 +33,23 @@ def main():
 
     if menu == "Login":
         st.subheader("Login")
-
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-
         if st.button("Login"):
             if username in users and users[username] == password:
                 st.success(f"Welcome back, {username}!")
                 st.balloons()
-                # You can redirect to a dashboard here
             else:
                 st.error("Invalid username or password")
 
     elif menu == "Sign Up":
         st.subheader("Create a New Account")
-
         new_user = st.text_input("Choose a Username")
         new_pass = st.text_input("Choose a Password", type="password")
         confirm_pass = st.text_input("Confirm Password", type="password")
-
         if st.button("Sign Up"):
             if new_user in users:
-                st.warning("Username already exists. Try another.")
+                st.warning("Username already exists.")
             elif new_pass != confirm_pass:
                 st.warning("Passwords do not match.")
             elif new_user == "" or new_pass == "":
@@ -58,3 +58,6 @@ def main():
                 users[new_user] = new_pass
                 save_users(users)
                 st.success("Signup successful! You can now log in.")
+
+if __name__ == "__main__":
+    main()
