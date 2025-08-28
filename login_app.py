@@ -33,7 +33,7 @@ def dashboard(username):
         st.write(f"👤 User Profile for {username} (to be built).")
     elif choice == "Logout":
         st.session_state['logged_in'] = False
-        st.experimental_rerun()
+        st.rerun()
 
 # Main App
 def main():
