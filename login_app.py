@@ -1,29 +1,53 @@
 import streamlit as st
 import json
 import os
+import pandas as pd
+import random
 import requests
-from nltk.sentiment import SentimentIntensityAnalyzer
 import nltk
+import matplotlib.pyplot as plt
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# Download NLTK data (only first run)
-nltk.download("vader_lexicon", quiet=True)
-
-# File to store user data
+# ==========================
+# Setup
+# ==========================
 USER_DATA_FILE = "users.json"
+MOVIES_FILE = "movies.csv"
+TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # Hardcoded for personal use
 
-# Load user data from file
+# Download VADER lexicon (only once)
+nltk.download("vader_lexicon", quiet=True)
+sia = SentimentIntensityAnalyzer()
+
+
+# ==========================
+# Helper Functions
+# ==========================
 def load_users():
     if os.path.exists(USER_DATA_FILE):
         with open(USER_DATA_FILE, "r") as f:
             return json.load(f)
     return {}
 
-# Save user data to file
 def save_users(users):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(users, f)
 
-# Sentiment Analysis Page (using NLTK VADER)
+def load_movies():
+    if os.path.exists(MOVIES_FILE):
+        return pd.read_csv(MOVIES_FILE)
+    return pd.DataFrame(columns=["title", "genre"])
+
+def fetch_movies_from_tmdb(genre_id):
+    url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&with_genres={genre_id}&language=en-US&page=1"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return [m["title"] for m in response.json().get("results", [])]
+    return ["No movies found"]
+
+# ==========================
+# Sentiment Analysis Page
+# ==========================
 def sentiment_analysis_page():
     st.subheader("📝 Sentiment Analysis")
 
@@ -31,56 +55,136 @@ def sentiment_analysis_page():
 
     if st.button("Analyze Sentiment"):
         if user_input.strip() != "":
-            sia = SentimentIntensityAnalyzer()
-            sentiment_scores = sia.polarity_scores(user_input)
+            score = sia.polarity_scores(user_input)["compound"]
 
-            compound = sentiment_scores["compound"]
-
-            if compound > 0.05:
-                st.success(f"Positive 😊 (score: {compound:.2f})")
-            elif compound < -0.05:
-                st.error(f"Negative 😡 (score: {compound:.2f})")
+            if score > 0.05:
+                st.success(f"Positive 😊 (score: {score:.2f})")
+            elif score < -0.05:
+                st.error(f"Negative 😡 (score: {score:.2f})")
             else:
-                st.info(f"Neutral 😐 (score: {compound:.2f})")
+                st.info(f"Neutral 😐 (score: {score:.2f})")
         else:
             st.warning("Please enter some text to analyze.")
 
-# Movie Recommendations Page (using TMDb API - hardcoded key)
+
+# ==========================
+# Movie Recommendations
+# ==========================
 def movie_recommendations_page():
-    st.subheader("🎬 Movie Recommendations (Powered by TMDb)")
+    st.subheader("🎬 Movie Recommendations")
 
-    query = st.text_input("Enter a movie name:")
+    movies_df = load_movies()
 
-    if st.button("Search"):
-        if query.strip() == "":
-            st.warning("Please enter a movie name.")
+    sentiment_score = st.slider("Select your mood score (-1 = Sad, +1 = Happy)", -1.0, 1.0, 0.0, 0.1)
+
+    if st.button("Recommend Movies"):
+        if sentiment_score > 0.05:
+            mood = "Positive"
+            recs = movies_df[movies_df["genre"] == "Comedy"]["title"].tolist()
+        elif sentiment_score < -0.05:
+            mood = "Negative"
+            recs = movies_df[movies_df["genre"] == "Drama"]["title"].tolist()
         else:
-            TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # Hardcoded API key
+            mood = "Neutral"
+            recs = movies_df[movies_df["genre"] == "Documentary"]["title"].tolist()
 
-            url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
-            response = requests.get(url)
+        if recs:
+            st.success(f"Based on your {mood} mood, here are some movies:")
+            st.write(random.sample(recs, min(5, len(recs))))
+        else:
+            st.warning("No recommendations found in the dataset.")
 
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get("results", [])
 
-                if results:
-                    for movie in results[:5]:  # show top 5
-                        st.write(f"🎥 **{movie['title']}** ({movie.get('release_date', 'N/A')[:4]})")
-                        st.write(movie.get("overview", "No description available."))
-                        if movie.get("poster_path"):
-                            st.image(f"https://image.tmdb.org/t/p/w200{movie['poster_path']}")
-                        st.markdown("---")
-                else:
-                    st.info("No movies found. Try another title.")
-            else:
-                st.error("Error fetching data from TMDb API. Please check your API key.")
+# ==========================
+# 🎯 New Feature: Movie Review Sentiment Analyzer with Chart
+# ==========================
+def review_sentiment_recommender():
+    st.subheader("🎯 Movie Review Sentiment Analyzer")
 
+    review = st.text_area("Write your movie review here:")
+
+    if st.button("Analyze Review & Recommend"):
+        if review.strip() == "":
+            st.warning("Please enter a review first.")
+            return
+
+        scores = sia.polarity_scores(review)
+        compound = scores["compound"]
+
+        # Determine overall mood
+        if compound > 0.05:
+            st.success(f"Your review is Positive 😊 (score: {compound:.2f})")
+            mood = "Positive"
+            genre = "Comedy"
+        elif compound < -0.05:
+            st.error(f"Your review is Negative 😡 (score: {compound:.2f})")
+            mood = "Negative"
+            genre = "Drama"
+        else:
+            st.info(f"Your review is Neutral 😐 (score: {compound:.2f})")
+            mood = "Neutral"
+            genre = "Documentary"
+
+        # 🎨 Bar Chart
+        st.write("### Sentiment Breakdown (Bar Chart)")
+        fig, ax = plt.subplots()
+        ax.bar(scores.keys(), scores.values(), color=["red", "blue", "green", "purple"])
+        ax.set_title("Sentiment Breakdown")
+        st.pyplot(fig)
+
+        # 🎨 Pie Chart
+        st.write("### Sentiment Breakdown (Pie Chart)")
+        fig2, ax2 = plt.subplots()
+        labels = ["Negative", "Neutral", "Positive"]
+        sizes = [scores["neg"], scores["neu"], scores["pos"]]
+        ax2.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90, colors=["red", "yellow", "green"])
+        ax2.axis("equal")  # Equal aspect ratio for circle
+        st.pyplot(fig2)
+
+        # Recommend Movies
+        movies_df = load_movies()
+        recs = movies_df[movies_df["genre"] == genre]["title"].tolist()
+
+        st.write(f"🎬 Since your review was {mood}, you might enjoy these {genre} movies:")
+        if recs:
+            st.write(random.sample(recs, min(5, len(recs))))
+        else:
+            st.warning("No matching movies in dataset.")
+
+
+# ==========================
+# Genre Explorer
+# ==========================
+def genre_explorer_page():
+    st.subheader("🎯 Genre Explorer (via TMDb API)")
+
+    genre_dict = {
+        "Action": 28,
+        "Comedy": 35,
+        "Drama": 18,
+        "Horror": 27,
+        "Romance": 10749,
+        "Sci-Fi": 878,
+        "Thriller": 53,
+    }
+
+    genre_choice = st.selectbox("Choose a genre", list(genre_dict.keys()))
+
+    if st.button("Fetch Movies"):
+        movies = fetch_movies_from_tmdb(genre_dict[genre_choice])
+        st.write(movies)
+
+
+# ==========================
 # Dashboard Page
+# ==========================
 def dashboard(username):
     st.title(f"📊 Dashboard - Welcome {username}!")
     st.sidebar.subheader("Navigation")
-    choice = st.sidebar.radio("Go to", ["Home", "Sentiment Analysis", "Movie Recommendations", "Profile", "Logout"])
+    choice = st.sidebar.radio(
+        "Go to",
+        ["Home", "Sentiment Analysis", "Movie Recommendations", "Review Analyzer", "Genre Explorer", "Profile", "Logout"]
+    )
 
     if choice == "Home":
         st.write("This is the home page of your dashboard.")
@@ -88,18 +192,24 @@ def dashboard(username):
         sentiment_analysis_page()
     elif choice == "Movie Recommendations":
         movie_recommendations_page()
+    elif choice == "Review Analyzer":
+        review_sentiment_recommender()
+    elif choice == "Genre Explorer":
+        genre_explorer_page()
     elif choice == "Profile":
         st.write(f"👤 User Profile for {username} (to be built).")
     elif choice == "Logout":
         st.session_state['logged_in'] = False
         st.rerun()
 
+
+# ==========================
 # Main App
+# ==========================
 def main():
     st.set_page_config(page_title="Login & Signup", layout="centered")
     st.title("🔐 Welcome to SentiMind")
 
-    # Initialize session state
     if "logged_in" not in st.session_state:
         st.session_state['logged_in'] = False
     if "username" not in st.session_state:
@@ -107,7 +217,6 @@ def main():
 
     users = load_users()
 
-    # If user is logged in → show Dashboard
     if st.session_state['logged_in']:
         dashboard(st.session_state['username'])
     else:
@@ -115,7 +224,6 @@ def main():
 
         if menu == "Login":
             st.subheader("Login")
-
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
 
@@ -130,7 +238,6 @@ def main():
 
         elif menu == "Sign Up":
             st.subheader("Create a New Account")
-
             new_user = st.text_input("Choose a Username")
             new_pass = st.text_input("Choose a Password", type="password")
             confirm_pass = st.text_input("Confirm Password", type="password")
@@ -147,8 +254,7 @@ def main():
                     save_users(users)
                     st.success("Signup successful! You can now log in.")
 
+
 if __name__ == "__main__":
     main()
-
-
 
