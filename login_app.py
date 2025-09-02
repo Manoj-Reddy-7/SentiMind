@@ -1,11 +1,12 @@
 import streamlit as st
 import json
 import os
-import nltk
+import requests
 from nltk.sentiment import SentimentIntensityAnalyzer
+import nltk
 
-# Download VADER lexicon (only once, cached by NLTK)
-nltk.download("vader_lexicon")
+# Download NLTK data (only first run)
+nltk.download("vader_lexicon", quiet=True)
 
 # File to store user data
 USER_DATA_FILE = "users.json"
@@ -22,20 +23,19 @@ def save_users(users):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(users, f)
 
-# ---------------- Sentiment Analysis ----------------
+# Sentiment Analysis Page (using NLTK VADER)
 def sentiment_analysis_page():
-    st.subheader("📝 Sentiment Analysis (Powered by NLTK VADER)")
+    st.subheader("📝 Sentiment Analysis")
 
     user_input = st.text_area("Enter your text here:")
 
     if st.button("Analyze Sentiment"):
         if user_input.strip() != "":
             sia = SentimentIntensityAnalyzer()
-            sentiment = sia.polarity_scores(user_input)
+            sentiment_scores = sia.polarity_scores(user_input)
 
-            st.write("🔎 Sentiment Breakdown:", sentiment)
+            compound = sentiment_scores["compound"]
 
-            compound = sentiment["compound"]
             if compound > 0.05:
                 st.success(f"Positive 😊 (score: {compound:.2f})")
             elif compound < -0.05:
@@ -45,7 +45,38 @@ def sentiment_analysis_page():
         else:
             st.warning("Please enter some text to analyze.")
 
-# ---------------- Dashboard ----------------
+# Movie Recommendations Page (using TMDb API - hardcoded key)
+def movie_recommendations_page():
+    st.subheader("🎬 Movie Recommendations (Powered by TMDb)")
+
+    query = st.text_input("Enter a movie name:")
+
+    if st.button("Search"):
+        if query.strip() == "":
+            st.warning("Please enter a movie name.")
+        else:
+            TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # Hardcoded API key
+
+            url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
+            response = requests.get(url)
+
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get("results", [])
+
+                if results:
+                    for movie in results[:5]:  # show top 5
+                        st.write(f"🎥 **{movie['title']}** ({movie.get('release_date', 'N/A')[:4]})")
+                        st.write(movie.get("overview", "No description available."))
+                        if movie.get("poster_path"):
+                            st.image(f"https://image.tmdb.org/t/p/w200{movie['poster_path']}")
+                        st.markdown("---")
+                else:
+                    st.info("No movies found. Try another title.")
+            else:
+                st.error("Error fetching data from TMDb API. Please check your API key.")
+
+# Dashboard Page
 def dashboard(username):
     st.title(f"📊 Dashboard - Welcome {username}!")
     st.sidebar.subheader("Navigation")
@@ -56,14 +87,14 @@ def dashboard(username):
     elif choice == "Sentiment Analysis":
         sentiment_analysis_page()
     elif choice == "Movie Recommendations":
-        st.write("🎬 Here you’ll see mood-based movie recommendations (to be built).")
+        movie_recommendations_page()
     elif choice == "Profile":
         st.write(f"👤 User Profile for {username} (to be built).")
     elif choice == "Logout":
         st.session_state['logged_in'] = False
         st.rerun()
 
-# ---------------- Main App ----------------
+# Main App
 def main():
     st.set_page_config(page_title="Login & Signup", layout="centered")
     st.title("🔐 Welcome to SentiMind")
@@ -79,7 +110,6 @@ def main():
     # If user is logged in → show Dashboard
     if st.session_state['logged_in']:
         dashboard(st.session_state['username'])
-
     else:
         menu = st.sidebar.selectbox("Select Action", ["Login", "Sign Up"])
 
@@ -119,5 +149,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
