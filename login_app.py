@@ -186,7 +186,7 @@ def main():
                 if login_user(username, password):
                     st.session_state.logged_in = True
                     st.session_state.username = username
-                    st.experimental_rerun()
+                    st.rerun()  # ✅ fixed here
                 else:
                     st.error("Invalid username or password.")
         elif choice == "Signup":
@@ -201,4 +201,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
