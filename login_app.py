@@ -1,8 +1,11 @@
 import streamlit as st
 import json
 import os
+from textblob import TextBlob
 
+# ===============================
 # File to store user data
+# ===============================
 USER_DATA_FILE = "users.json"
 
 # Load user data from file
@@ -17,8 +20,10 @@ def save_users(users):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(users, f)
 
-from textblob import TextBlob
 
+# ===============================
+# Sentiment Analysis Page
+# ===============================
 def sentiment_analysis_page():
     st.subheader("📝 Sentiment Analysis")
 
@@ -40,20 +45,21 @@ def sentiment_analysis_page():
             st.warning("Please enter some text to analyze.")
 
 
-
-
-
+# ===============================
 # Dashboard Page
+# ===============================
 def dashboard(username):
     st.title(f"📊 Dashboard - Welcome {username}!")
     st.sidebar.subheader("Navigation")
-    choice = st.sidebar.radio("Go to", ["Home", "Sentiment Analysis", "Movie Recommendations", "Profile", "Logout"])
+    choice = st.sidebar.radio(
+        "Go to", 
+        ["Home", "Sentiment Analysis", "Movie Recommendations", "Profile", "Logout"]
+    )
 
     if choice == "Home":
         st.write("This is the home page of your dashboard.")
     elif choice == "Sentiment Analysis":
-    sentiment_analysis_page()
-
+        sentiment_analysis_page()
     elif choice == "Movie Recommendations":
         st.write("🎬 Here you’ll see mood-based movie recommendations (to be built).")
     elif choice == "Profile":
@@ -62,7 +68,10 @@ def dashboard(username):
         st.session_state['logged_in'] = False
         st.rerun()
 
+
+# ===============================
 # Main App
+# ===============================
 def main():
     st.set_page_config(page_title="Login & Signup", layout="centered")
     st.title("🔐 Welcome to SentiMind")
@@ -116,6 +125,11 @@ def main():
                     save_users(users)
                     st.success("Signup successful! You can now log in.")
 
+
+# ===============================
+# Run App
+# ===============================
 if __name__ == "__main__":
     main()
+
 
