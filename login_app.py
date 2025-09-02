@@ -26,7 +26,8 @@ def dashboard(username):
     if choice == "Home":
         st.write("This is the home page of your dashboard.")
     elif choice == "Sentiment Analysis":
-        st.write("🚀 Here you can analyze text sentiment (to be built).")
+    sentiment_analysis_page()
+
     elif choice == "Movie Recommendations":
         st.write("🎬 Here you’ll see mood-based movie recommendations (to be built).")
     elif choice == "Profile":
