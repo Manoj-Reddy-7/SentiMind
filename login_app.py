@@ -1,11 +1,13 @@
 import streamlit as st
 import json
 import os
-from textblob import TextBlob
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
 
-# ===============================
+# Download VADER lexicon (only once, cached by NLTK)
+nltk.download("vader_lexicon")
+
 # File to store user data
-# ===============================
 USER_DATA_FILE = "users.json"
 
 # Load user data from file
@@ -20,41 +22,34 @@ def save_users(users):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(users, f)
 
-
-# ===============================
-# Sentiment Analysis Page
-# ===============================
+# ---------------- Sentiment Analysis ----------------
 def sentiment_analysis_page():
-    st.subheader("📝 Sentiment Analysis")
+    st.subheader("📝 Sentiment Analysis (Powered by NLTK VADER)")
 
     user_input = st.text_area("Enter your text here:")
 
     if st.button("Analyze Sentiment"):
         if user_input.strip() != "":
-            blob = TextBlob(user_input)
-            sentiment = blob.sentiment.polarity  # -1 (negative) → +1 (positive)
+            sia = SentimentIntensityAnalyzer()
+            sentiment = sia.polarity_scores(user_input)
 
-            if sentiment > 0:
-                st.success(f"Positive 😊 (score: {sentiment:.2f})")
-            elif sentiment < 0:
-                st.error(f"Negative 😡 (score: {sentiment:.2f})")
+            st.write("🔎 Sentiment Breakdown:", sentiment)
+
+            compound = sentiment["compound"]
+            if compound > 0.05:
+                st.success(f"Positive 😊 (score: {compound:.2f})")
+            elif compound < -0.05:
+                st.error(f"Negative 😡 (score: {compound:.2f})")
             else:
-                st.info(f"Neutral 😐 (score: {sentiment:.2f})")
-
+                st.info(f"Neutral 😐 (score: {compound:.2f})")
         else:
             st.warning("Please enter some text to analyze.")
 
-
-# ===============================
-# Dashboard Page
-# ===============================
+# ---------------- Dashboard ----------------
 def dashboard(username):
     st.title(f"📊 Dashboard - Welcome {username}!")
     st.sidebar.subheader("Navigation")
-    choice = st.sidebar.radio(
-        "Go to", 
-        ["Home", "Sentiment Analysis", "Movie Recommendations", "Profile", "Logout"]
-    )
+    choice = st.sidebar.radio("Go to", ["Home", "Sentiment Analysis", "Movie Recommendations", "Profile", "Logout"])
 
     if choice == "Home":
         st.write("This is the home page of your dashboard.")
@@ -68,10 +63,7 @@ def dashboard(username):
         st.session_state['logged_in'] = False
         st.rerun()
 
-
-# ===============================
-# Main App
-# ===============================
+# ---------------- Main App ----------------
 def main():
     st.set_page_config(page_title="Login & Signup", layout="centered")
     st.title("🔐 Welcome to SentiMind")
@@ -125,10 +117,6 @@ def main():
                     save_users(users)
                     st.success("Signup successful! You can now log in.")
 
-
-# ===============================
-# Run App
-# ===============================
 if __name__ == "__main__":
     main()
 
