@@ -92,3 +92,27 @@ def main():
 if __name__ == "__main__":
     main()
 
+from textblob import TextBlob
+
+def sentiment_analysis_page():
+    st.subheader("📝 Sentiment Analysis")
+
+    user_input = st.text_area("Enter your text here:")
+
+    if st.button("Analyze Sentiment"):
+        if user_input.strip() != "":
+            blob = TextBlob(user_input)
+            sentiment = blob.sentiment.polarity  # -1 (negative) → +1 (positive)
+
+            if sentiment > 0:
+                st.success(f"Positive 😊 (score: {sentiment:.2f})")
+            elif sentiment < 0:
+                st.error(f"Negative 😡 (score: {sentiment:.2f})")
+            else:
+                st.info(f"Neutral 😐 (score: {sentiment:.2f})")
+
+        else:
+            st.warning("Please enter some text to analyze.")
+
+
+
