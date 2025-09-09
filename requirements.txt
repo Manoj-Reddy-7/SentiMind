@@ -6,5 +6,7 @@ transformers
 torch
 requests
 google-generativeai
+textblob
+
 
 
