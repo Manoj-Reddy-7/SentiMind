@@ -1,8 +1,10 @@
 streamlit
-textblob
-nltk
-requests
 pandas
 matplotlib
-pipline
+nltk
+transformers
+torch
+requests
+google-generativeai
+
 
