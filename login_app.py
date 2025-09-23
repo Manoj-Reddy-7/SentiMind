@@ -79,6 +79,11 @@ def display_movies(movies):
         if (i + 1) % 5 == 0:
             cols = st.columns(5)
 
+def display_movies_by_genre(movies_by_genre):
+    for genre, movies in movies_by_genre.items():
+        st.markdown(f"### 🎬 {genre} Movies")
+        display_movies(movies)
+
 # ---------------- TMDb API Calls ----------------
 def get_tmdb_recommendations(genre_name, limit=5):
     genre_id = genre_ids.get(genre_name, 18)
@@ -122,7 +127,7 @@ def get_trending_movies_by_mood(mood, limit_per_genre=5):
     return movies_to_display
 
 # ---------------- Agentic AI Logic ----------------
-def agentic_recommendation(username, last_text=None):
+def agentic_recommendation_by_genre(username, last_text=None):
     # Determine mood
     mood = "Neutral"
     if last_text:
@@ -133,18 +138,16 @@ def agentic_recommendation(username, last_text=None):
         elif score < -0.2:
             mood = "Negative"
     
-    # Trending movies
-    trending = get_trending_movies_by_mood(mood)
-    
-    # Genre variety
     genres = mood_to_genres[mood]
-    genre_movies = []
+    movies_by_genre = {}
+
     for genre in genres:
-        genre_movies += get_tmdb_recommendations(genre, limit=3)
+        trending = get_trending_movies_by_mood(mood, limit_per_genre=5)
+        genre_movies = get_tmdb_recommendations(genre, limit=5)
+        combined = {m['id']: m for m in trending + genre_movies}.values()
+        movies_by_genre[genre] = list(combined)
     
-    # Remove duplicates
-    combined = {m['id']: m for m in trending + genre_movies}.values()
-    return list(combined), mood
+    return movies_by_genre, mood
 
 # ---------------- AI Agent Page ----------------
 def ai_agent_page():
@@ -153,9 +156,9 @@ def ai_agent_page():
 
     if st.button("Get Recommendations"):
         if user_input.strip():
-            movies, mood = agentic_recommendation(st.session_state.username, last_text=user_input)
+            movies_by_genre, mood = agentic_recommendation_by_genre(st.session_state.username, last_text=user_input)
             st.info(f"Detected Mood: **{mood}**")
-            display_movies(movies)
+            display_movies_by_genre(movies_by_genre)
         else:
             st.warning("Please type something!")
 
@@ -173,10 +176,9 @@ def dashboard(username):
     if choice == "AI Agent":
         ai_agent_page()
     elif choice == "Mood Trending":
-        # Default autonomous recommendations
-        movies, mood = agentic_recommendation(username)
+        movies_by_genre, mood = agentic_recommendation_by_genre(username)
         st.info(f"Detected Mood: **{mood}**")
-        display_movies(movies)
+        display_movies_by_genre(movies_by_genre)
 
 # ---------------- Main App ----------------
 def main():
