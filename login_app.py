@@ -40,7 +40,7 @@ def login_user(username, password):
     return False
 
 # ---------------- MOVIE RECOMMENDATION ----------------
-TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # Hardcoded for personal use
+TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # For testing, replace with your own key
 MOVIES_FILE = "movies.csv"
 BASE_URL = "https://image.tmdb.org/t/p/w200"
 MOVIE_URL = "https://www.themoviedb.org/movie/"
@@ -48,33 +48,39 @@ MOVIE_URL = "https://www.themoviedb.org/movie/"
 if os.path.exists(MOVIES_FILE):
     movies_df = pd.read_csv(MOVIES_FILE)
 else:
-    movies_df = pd.DataFrame(columns=["title", "genre", "mood"])
+    movies_df = pd.DataFrame(columns=["title", "genre", "mood", "release_year"])
 
+# ---------------- DISPLAY MOVIES ----------------
 def display_movies(movies):
     if not movies:
         st.warning("No recommendations found.")
         return
 
-    # Grid of 5 columns
     cols = st.columns(5)
     for i, movie in enumerate(movies):
         col = cols[i % 5]
         with col:
-            if movie.get("poster"):
-                url = MOVIE_URL + str(movie["id"])
-                # clickable poster with markdown
+            poster_url = BASE_URL + movie["poster"] if movie.get("poster") else None
+            movie_link = MOVIE_URL + str(movie.get("id", 0))
+
+            if poster_url:
                 st.markdown(
-                    f'<a href="{url}" target="_blank">'
-                    f'<img src="{BASE_URL + movie["poster"]}" '
-                    f'style="width:100%; border-radius:10px;"></a>',
+                    f'<a href="{movie_link}" target="_blank">'
+                    f'<img src="{poster_url}" style="width:100%; border-radius:10px;"></a>',
                     unsafe_allow_html=True
                 )
-                st.caption(movie["title"])
             else:
                 st.write(f"🍿 {movie['title']}")
-        if (i + 1) % 5 == 0 and i != len(movies) - 1:
+
+            title = movie.get("title", "Unknown")
+            genre = movie.get("genre", "N/A")
+            year = movie.get("release_year", "N/A")
+            st.caption(f"**{title}**\n{genre} | {year}")
+
+        if (i + 1) % 5 == 0:
             cols = st.columns(5)
 
+# ---------------- TMDb RECOMMENDATIONS ----------------
 def get_tmdb_recommendations(mood):
     mood_to_genre = {
         "Positive": 35,   # Comedy
@@ -86,15 +92,30 @@ def get_tmdb_recommendations(mood):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        return [{"title": m["title"], "poster": m.get("poster_path"), "id": m["id"]}
-                for m in data.get("results", [])[:20]]
+        movies = []
+        for m in data.get("results", [])[:20]:
+            # TMDb returns genre IDs, mapping to genre names could be improved
+            genre_name = "N/A"
+            if "genre_ids" in m and m["genre_ids"]:
+                genre_name = str(m["genre_ids"][0])
+            movies.append({
+                "title": m.get("title", "Unknown"),
+                "poster": m.get("poster_path"),
+                "id": m.get("id", 0),
+                "genre": genre_name,
+                "release_year": m.get("release_date", "")[:4] if m.get("release_date") else "N/A"
+            })
+        return movies
     return []
 
 def recommend_movies(mood):
-    local_movies = movies_df[movies_df["mood"].str.lower() == mood.lower()]
+    local_movies = movies_df[movies_df["mood"].notna() & (movies_df["mood"].str.lower() == mood.lower())]
     if not local_movies.empty:
         sampled = random.sample(local_movies["title"].tolist(), min(20, len(local_movies)))
-        return [{"title": title, "poster": None, "id": 0} for title in sampled]
+        return [{"title": title, "poster": None, "id": 0,
+                 "genre": local_movies.loc[local_movies["title"] == title, "genre"].values[0] if "genre" in local_movies else "N/A",
+                 "release_year": local_movies.loc[local_movies["title"] == title, "release_year"].values[0] if "release_year" in local_movies else "N/A"}
+                for title in sampled]
     else:
         return get_tmdb_recommendations(mood)
 
@@ -116,7 +137,7 @@ def sentiment_analysis_page():
                 sentiment = "Neutral 😐"
                 mood = "Neutral"
 
-            st.success(f"Sentiment: **{sentiment}** (score={score})")
+            st.success(f"Sentiment: **{sentiment}** (score={score:.2f})")
 
             st.subheader("🎬 Recommended Movies")
             recommended = recommend_movies(mood)
@@ -143,8 +164,15 @@ def genre_explorer_page():
         response = requests.get(url)
         if response.status_code == 200:
             results = response.json().get("results", [])
-            movies = [{"title": m["title"], "poster": m.get("poster_path"), "id": m["id"]}
-                      for m in results[:20]]
+            movies = []
+            for m in results[:20]:
+                movies.append({
+                    "title": m.get("title", "Unknown"),
+                    "poster": m.get("poster_path"),
+                    "id": m.get("id", 0),
+                    "genre": choice,
+                    "release_year": m.get("release_date", "")[:4] if m.get("release_date") else "N/A"
+                })
             display_movies(movies)
         else:
             st.error("Error fetching data from TMDb.")
@@ -167,8 +195,14 @@ def sentiment_trends_page():
     ax.set_ylabel("Sentiment Score")
     st.pyplot(fig)
 
+# ---------------- DASHBOARD ----------------
 def dashboard(username):
     st.title(f"🎉 Welcome, {username}!")
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.rerun()
+
     menu = ["Sentiment Analysis", "Movie Recommendations",
             "Genre Explorer", "Sentiment Trends"]
     choice = st.sidebar.radio("Navigation", menu)
