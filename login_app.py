@@ -1,10 +1,15 @@
+
+
+
 import streamlit as st
 import pandas as pd
 import hashlib
 import os
 import requests
+import matplotlib.pyplot as plt
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import nltk
+import random
 
 # Download NLTK VADER if not already
 nltk.download("vader_lexicon")
@@ -38,22 +43,21 @@ def login_user(username, password):
     return False
 
 # ---------------- MOVIE RECOMMENDATION ----------------
-TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # Replace with your TMDb API key
+TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # For testing
+MOVIES_FILE = "movies.csv"
 BASE_URL = "https://image.tmdb.org/t/p/w200"
 MOVIE_URL = "https://www.themoviedb.org/movie/"
+
+if os.path.exists(MOVIES_FILE):
+    movies_df = pd.read_csv(MOVIES_FILE)
+else:
+    movies_df = pd.DataFrame(columns=["title", "genre", "mood", "release_year"])
 
 # TMDb Genre IDs
 genre_ids = {
     "Action": 28, "Comedy": 35, "Drama": 18,
     "Horror": 27, "Romance": 10749, "Sci-Fi": 878,
     "Thriller": 53, "Documentary": 99
-}
-
-# Mood → genres mapping
-mood_to_genres = {
-    "Positive": ["Comedy", "Romance", "Action"],
-    "Neutral": ["Drama", "Documentary"],
-    "Negative": ["Horror", "Thriller"]
 }
 
 # ---------------- DISPLAY MOVIES ----------------
@@ -86,14 +90,14 @@ def display_movies(movies):
         if (i + 1) % 5 == 0:
             cols = st.columns(5)
 
-# ---------------- TMDb RECOMMENDATIONS (NO ADULT MOVIES) ----------------
+# ---------------- TMDb RECOMMENDATIONS ----------------
 def get_tmdb_recommendations(genre_name, limit=5):
     genre_id = genre_ids.get(genre_name, 18)
-    url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&with_genres={genre_id}&sort_by=popularity.desc&include_adult=false"
+    url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&with_genres={genre_id}&sort_by=popularity.desc"
     response = requests.get(url)
-    movies = []
     if response.status_code == 200:
         results = response.json().get("results", [])
+        movies = []
         for m in results[:limit]:
             movies.append({
                 "title": m.get("title", "Unknown"),
@@ -102,40 +106,21 @@ def get_tmdb_recommendations(genre_name, limit=5):
                 "genre": genre_name,
                 "release_year": m.get("release_date", "")[:4] if m.get("release_date") else "N/A"
             })
-    return movies
+        return movies
+    return []
 
-# ---------------- TRENDING MOVIES FILTERED BY MOOD ----------------
-def get_trending_movies_by_mood(mood, limit_per_genre=5):
-    genres = mood_to_genres[mood]
-    url = f"https://api.themoviedb.org/3/trending/movie/week?api_key={TMDB_API_KEY}&include_adult=false"
-    response = requests.get(url)
-    movies_to_display = []
+# ---------------- COMBINED MOOD & GENRE RECOMMENDATION ----------------
+mood_to_genres = {
+    "Positive": ["Comedy", "Romance", "Action"],
+    "Neutral": ["Drama", "Documentary"],
+    "Negative": ["Horror", "Thriller"]
+}
 
-    if response.status_code == 200:
-        results = response.json().get("results", [])
-        for genre_name in genres:
-            genre_id = genre_ids.get(genre_name, None)
-            count = 0
-            for m in results:
-                if genre_id in m.get("genre_ids", []):
-                    movies_to_display.append({
-                        "title": m.get("title", "Unknown"),
-                        "poster": m.get("poster_path"),
-                        "id": m.get("id", 0),
-                        "genre": genre_name,
-                        "release_year": m.get("release_date", "")[:4] if m.get("release_date") else "N/A"
-                    })
-                    count += 1
-                if count >= limit_per_genre:
-                    break
-    return movies_to_display
-
-# ---------------- SENTIMENT & TRENDING PAGE ----------------
-def sentiment_trending_recommendation_page():
-    st.subheader("🧠 Trending Movies Based on Your Mood")
+def sentiment_genre_recommendation_page():
+    st.subheader("🧠 Mood & Genre Based Recommendations")
     text = st.text_area("Enter text (review, comment, etc.)")
 
-    if st.button("Analyze & Show Trending"):
+    if st.button("Analyze & Recommend"):
         if text.strip():
             # Sentiment analysis
             analyzer = SentimentIntensityAnalyzer()
@@ -153,12 +138,14 @@ def sentiment_trending_recommendation_page():
 
             st.success(f"Sentiment: **{sentiment}** (score={score:.2f})")
 
-            # Get trending movies filtered by mood genres
-            trending_movies = get_trending_movies_by_mood(mood)
-            if trending_movies:
-                display_movies(trending_movies)
-            else:
-                st.warning("No trending movies match your mood genres right now.")
+            # Recommend movies for multiple genres based on mood
+            genres = mood_to_genres[mood]
+
+            for genre in genres:
+                st.markdown(f"### 🎬 {genre} Movies")
+                recommended = get_tmdb_recommendations(genre, limit=5)
+                display_movies(recommended)
+
         else:
             st.warning("Please enter some text.")
 
@@ -170,12 +157,12 @@ def dashboard(username):
         st.session_state.username = ""
         st.rerun()
 
-    # Unified section: mood-based trending movies
-    sentiment_trending_recommendation_page()
+    # Only the unified section
+    sentiment_genre_recommendation_page()
 
 # ---------------- MAIN APP ----------------
 def main():
-    st.title("🎬 SentiMind - Mood-Based Trending Movies")
+    st.title("🎬 SentiMind - Mood & Genre Movie Recommendation")
     menu = ["Login", "Signup"]
     choice = st.sidebar.selectbox("Menu", menu)
 
