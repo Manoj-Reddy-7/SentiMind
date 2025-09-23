@@ -40,7 +40,7 @@ def login_user(username, password):
     return False
 
 # ---------------- MOVIE RECOMMENDATION ----------------
-TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695" # Hardcoded for personal use
+TMDB_API_KEY = "47ae6fa83619bfd3a777dcb6b45fc695"  # Hardcoded for personal use
 MOVIES_FILE = "movies.csv"
 
 if os.path.exists(MOVIES_FILE):
@@ -50,23 +50,26 @@ else:
 
 def get_tmdb_recommendations(mood):
     mood_to_genre = {
-        "Positive": 35, # Comedy
-        "Negative": 27, # Horror
-        "Neutral": 18 # Drama
+        "Positive": 35,  # Comedy
+        "Negative": 27,  # Horror
+        "Neutral": 18    # Drama
     }
     genre_id = mood_to_genre.get(mood, 18)
     url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&with_genres={genre_id}&sort_by=popularity.desc"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        return [movie["title"] for movie in data.get("results", [])[:5]]
+        movies = []
+        for movie in data.get("results", [])[:5]:
+            poster_url = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None
+            movies.append({"title": movie["title"], "poster": poster_url})
+        return movies
     return []
 
 def recommend_movies(mood):
     local_movies = movies_df[movies_df["mood"].str.lower() == mood.lower()]
     if not local_movies.empty:
-        return random.sample(local_movies["title"].tolist(),
-                             min(5, len(local_movies)))
+        return [{"title": title, "poster": None} for title in random.sample(local_movies["title"].tolist(), min(5, len(local_movies)))]
     else:
         return get_tmdb_recommendations(mood)
 
@@ -94,8 +97,12 @@ def sentiment_analysis_page():
             st.subheader("🎬 Recommended Movies")
             recommended = recommend_movies(mood)
             if recommended:
-                for movie in recommended:
-                    st.write(f"🍿 {movie}")
+                cols = st.columns(3)  # grid layout
+                for i, movie in enumerate(recommended):
+                    with cols[i % 3]:
+                        st.write(f"🍿 {movie['title']}")
+                        if movie['poster']:
+                            st.image(movie['poster'], width=150)
             else:
                 st.warning("No recommendations found.")
         else:
@@ -107,8 +114,12 @@ def movie_recommendations_page():
     if st.button("Get Recommendations"):
         recommended = recommend_movies(mood)
         if recommended:
-            for movie in recommended:
-                st.write(f"🍿 {movie}")
+            cols = st.columns(3)
+            for i, movie in enumerate(recommended):
+                with cols[i % 3]:
+                    st.write(f"🍿 {movie['title']}")
+                    if movie['poster']:
+                        st.image(movie['poster'], width=150)
         else:
             st.warning("No recommendations found.")
 
@@ -125,8 +136,12 @@ def genre_explorer_page():
         if response.status_code == 200:
             results = response.json().get("results", [])
             if results:
-                for m in results[:10]:
-                    st.write(f"🎬 {m['title']}")
+                cols = st.columns(3)
+                for i, m in enumerate(results[:9]):
+                    with cols[i % 3]:
+                        st.write(f"🎬 {m['title']}")
+                        if m.get("poster_path"):
+                            st.image(f"https://image.tmdb.org/t/p/w500{m['poster_path']}", width=150)
             else:
                 st.warning("No movies found.")
         else:
@@ -186,7 +201,7 @@ def main():
                 if login_user(username, password):
                     st.session_state.logged_in = True
                     st.session_state.username = username
-                    st.rerun() # ✅ fixed here
+                    st.rerun()  # ✅ fixed rerun
                 else:
                     st.error("Invalid username or password.")
         elif choice == "Signup":
@@ -201,4 +216,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
